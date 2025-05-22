@@ -9,7 +9,7 @@ from webots_ros2_driver.webots_controller import WebotsController
 def generate_launch_description():
     package_dir = get_package_share_directory('my_package')
     robot_description_path = os.path.join(package_dir, 'resource', 'my_robot.urdf')
-
+    print(robot_description_path)
     webots = WebotsLauncher(
         world=os.path.join(package_dir, 'worlds', 'my_world.wbt')
     )
@@ -22,6 +22,7 @@ def generate_launch_description():
     )
 
     robot_description_path = os.path.join(package_dir, 'resource', 'mavic_webots.urdf')
+    print(robot_description_path)
     mavic_driver = WebotsController(
         robot_name='Mavic_2_PRO',
         parameters=[
