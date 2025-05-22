@@ -1,3 +1,5 @@
+Clone the repository to the webots tutorial workspace
+
 # Running
 In the workspace:
 
