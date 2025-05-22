@@ -21,9 +21,19 @@ def generate_launch_description():
         ]
     )
 
+    robot_description_path = os.path.join(package_dir, 'resource', 'mavic_webots.urdf')
+    mavic_driver = WebotsController(
+        robot_name='Mavic_2_PRO',
+        parameters=[
+            {'robot_description': robot_description_path},
+        ],
+        respawn=True
+    )
+
     return LaunchDescription([
         webots,
         my_robot_driver,
+        mavic_driver,
         launch.actions.RegisterEventHandler(
             event_handler=launch.event_handlers.OnProcessExit(
                 target_action=webots,
