@@ -12,7 +12,6 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projec
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projects/objects/factory/containers/protos/CardboardBox.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projects/vehicles/protos/tesla/TeslaModel3Simple.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projects/objects/trees/protos/Pine.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projects/objects/trees/protos/Forest.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projects/robots/dji/mavic/protos/Mavic2Pro.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/humans/pedestrian/protos/Pedestrian.proto"
 
@@ -29,7 +28,7 @@ WorldInfo {
 }
 Viewpoint {
   orientation -0.09292479494503735 -0.0012064933613238063 0.9956723993654698 3.201100558705276
-  position 8.8298891766877 1.02663147100698 2.6296900198889666
+  position 4.779513081600405 0.7830602659934383 1.8660311655426056
   near 0.2
   follow "Mavic 2 PRO"
   followSmoothness 0.2
@@ -127,32 +126,8 @@ Pine {
   rotation 0 0 1 -2.6179953071795863
   name "pine tree(2)"
 }
-Forest {
-  translation 0 0 -0.01
-  shape [
-    200 200
-    200 0
-    50 0
-    50 50
-    -50 50
-    -50 -50
-    50 -50
-    50 0
-    200 0
-    200 -200
-    -200 -200
-    -200 200
-  ]
-  density 0.01
-  type "cherry tree"
-  randomSeed 1
-  maxHeight 12
-  minHeight 6
-  maxRadius 6
-  minRadius 3
-}
 Pedestrian {
-  translation -16.41 0 1.27
+  translation 156.28 -65.83 1.27
 }
 Mavic2Pro {
   translation 0 0 0.1

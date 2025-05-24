@@ -10,7 +10,7 @@
 
         <plugin type="webots_ros2_driver::Ros2IMU">
             <enabled>true</enabled>
-            <topicName>/imu</topicName>
+            <topicName>/Mavic_2_PRO/imu</topicName>
             <alwaysOn>true</alwaysOn>
             <frameName>imu_link</frameName>
             <inertialUnitName>inertial unit</inertialUnitName>

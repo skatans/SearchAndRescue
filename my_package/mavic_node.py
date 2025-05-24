@@ -3,9 +3,11 @@ from rclpy.node import Node
 
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
+from sensor_msgs.msg import Imu
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PointStamped
+from tf_transformations import euler_from_quaternion
 
 import cv2
 import time
@@ -30,9 +32,13 @@ class MavicNode(Node):
         self.mid_y = 0
         self.human_cascade = self.initialize_model()
         # Flags to track the state of the drone
+        self.initialized = False
         self.target_found = False
         self.arrived_at_target = False
         self.broadcasting = False
+        # IMU
+        self.imu_sub = self.create_subscription(Imu, '/Mavic_2_PRO/imu', self.imu_callback, 10)
+        self.yaw = 0.0
         # GPS
         self.gps_sub = self.create_subscription(PointStamped, '/Mavic_2_PRO/gps', self.gps_callback, 10)
         self.origin_lat = None
@@ -40,8 +46,8 @@ class MavicNode(Node):
         self.current_pos = (0.0, 0.0)
         self.waypoints = []
         self.current_waypoint_index = 0
-        self.tolerance = 1.0 # how many meters away from a waypoint to consider it found
-        self.step = 5.0  # meters
+        self.tolerance = 5.0 # how many meters away from a waypoint to consider it found
+        self.step = 20.0  # meters
         # Publisher for broadcasting GPS coordinates when target is found
         self.gps_publisher = self.create_publisher(PointStamped, '/target/gps', 10)
         self.target_publisher = self.create_publisher(String, '/target/found', 10)
@@ -49,15 +55,34 @@ class MavicNode(Node):
         self.cmd_vel_publisher = self.create_publisher(Twist, '/Mavic_2_PRO/cmd_vel', 10)
 
     '''
-    GPS and navigation
+    IMU, GPS and navigation
     '''
 
+    def imu_callback(self, msg):
+        # Process IMU data
+        # z is the yaw, x is the roll, y is the pitch
+        # yaw is where the drone is facing, roll is the tilt to the left or right, pitch is the tilt forward or backward
+        #self.get_logger().info(f'Orientation: {msg.orientation.x}, {msg.orientation.y}, {msg.orientation.z}, {msg.orientation.w}')
+        # Convert quaternion to Euler angles
+        orientation_q = msg.orientation
+        quaternion = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
+        roll, pitch, yaw = euler_from_quaternion(quaternion)
+        self.yaw = yaw  # The heading relative to north (in radians)
+        #self.get_logger().info(f'Yaw (heading): {yaw}')
+
     def gps_callback(self, msg):
-        if self.origin_lat is None or self.origin_lon is None:
+        if self.target_found:
+            return  # Do not process GPS messages when the target has been found
+        if not self.initialized:
             # Set the origin coordinates from the first GPS message
             self.origin_lat = msg.point.x
             self.origin_lon = msg.point.y
             self.get_logger().info(f'Setting origin GPS coordinates: ({self.origin_lat}, {self.origin_lon})')
+            # Send a command to rise up
+            self.change_altitude(5.0)
+            time.sleep(5)  # Wait for some seconds to rise up
+            self.stop()
+            self.initialized = True
         # Update the current position
         self.current_pos = (msg.point.x, msg.point.y)
         if self.broadcasting:
@@ -67,19 +92,19 @@ class MavicNode(Node):
     def generate_lawn_mower_path(self):
         self.get_logger().info('Generating waypoints.')
         # min and max values for x and y coordinates
-        xmin, xmax = 0.0, 50.0
-        ymin, ymax = 0.0, 50.0
+        xmin, xmax = 0.0, 100.0
+        ymin, ymax = 0.0, 100.0
         forward = True
         y = ymin
         while y <= ymax:
             x_range = (xmin, xmax) if forward else (xmax, xmin)
-            xs = self.linspace(*x_range, 5)
+            xs = self.linspace(*x_range, 10)  # Generate 10 waypoints along the x-axis
             for x in xs:
                 # Convert waypoint (x, y) from local (meters) to world (GPS) coordinates
                 lat = self.origin_lat + x
                 lon = self.origin_lon + y
                 self.waypoints.append((lat, lon))
-            y += self.step
+            y += self.step # Move to the next row
             forward = not forward
 
     def linspace(self, start, end, num):
@@ -105,36 +130,67 @@ class MavicNode(Node):
             if self.origin_lat is None or self.origin_lon is None:
                 self.get_logger().warn('Origin GPS coordinates are not set. Cannot navigate.')
                 return
+
             # Calculate the current position in meters from the origin
             current_x = self.current_pos[0] - self.origin_lat
             current_y = self.current_pos[1] - self.origin_lon
+
             # Check if the drone is close enough to the current waypoint
             target_x, target_y = self.waypoints[self.current_waypoint_index]
             current_x, current_y = self.current_pos
             distance_x, distance_y = target_x - current_x, target_y - current_y
-            dsitance = math.hypot(distance_x, distance_y)
-            if dsitance < self.tolerance:
+            distance = math.hypot(distance_x, distance_y)
+            if distance < self.tolerance:
                 self.get_logger().info(f'Arrived at waypoint {self.current_waypoint_index + 1}, coordinates {self.waypoints[self.current_waypoint_index]}.')
                 self.get_logger().info(f'Own coordinates {self.current_pos}, next waypointt {self.waypoints[self.current_waypoint_index + 1]}.')
                 self.current_waypoint_index += 1
                 return  # Move to the next waypoint
-            if dsitance > 0 or dsitance < 0:
-                # Normalize direction and send velocity
-                '''
-                Now it just sends a velocity command but it's not to the target waypoint
-                '''
-                cmd = Twist()
-                cmd.linear.x = distance_x / dsitance
-                cmd.linear.y = distance_y / dsitance
-                self.cmd_vel_publisher.publish(cmd)
+            else:
+                # Calculate the desired angle to the next waypoint
+                desired_yaw = math.atan2(distance_y, distance_x)
+                # Calculate the difference between the current yaw and the desired yaw
+                yaw_diff = desired_yaw - self.yaw
+                # Normalize the angle to the range [-pi, pi]
+                yaw_diff = (yaw_diff + math.pi) % (2 * math.pi) - math.pi
+
+                # If the drone is not facing the waypoint (within 0.2 radians), turn towards it
+                if abs(yaw_diff) > 0.2:
+                    if yaw_diff > 0:
+                        self.turn_left()
+                    else:
+                        self.turn_right()
+                    time.sleep(1.5) # Stabilization delay
+                    self.stop_turning()  # Stop after turning
+                else:
+                    self.move_forward(2.5)
+                    time.sleep(5.0) # Stabilization delay
         else:
             self.get_logger().info('All waypoints have been visited without finding the target.')
+            # Expand the search area by generating new waypoints around the original ones
+            # Calculate the bounding box of the original waypoints
+            lats = [wp[0] for wp in self.waypoints]
+            lons = [wp[1] for wp in self.waypoints]
+            lat_min, lat_max = min(lats), max(lats)
+            lon_min, lon_max = min(lons), max(lons)
+            expansion = self.step * 2  # Expand the search area by 2 steps
+            # Generate new waypoints around the perimeter (clockwise)
+            expanded = [
+                (lat_min - expansion, lon_min - expansion),
+                (lat_min - expansion, lon_max + expansion),
+                (lat_max + expansion, lon_max + expansion),
+                (lat_max + expansion, lon_min - expansion)
+            ]
+            self.waypoints.extend(expanded)
+            self.get_logger().info(f'Added expanded waypoints: {expanded}')
+            self.current_waypoint_index = len(self.waypoints) - len(expanded)
 
     '''
     Image processing and target detection
     '''
 
     def listener_callback(self, msg):
+        if not self.initialized:
+            return
         try:
             # Get the image from the drone camera
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -171,12 +227,6 @@ class MavicNode(Node):
         haarcascade_path = os.path.join(package_share_directory, 'data', 'haarcascade_fullbody.xml')
         return cv2.CascadeClassifier(haarcascade_path)
 
-    def send_random_command(self):
-        msg = Twist()
-        msg.linear.x = random.uniform(-1.0, 1.0)
-        msg.angular.z = random.uniform(-0.5, 0.5)
-        self.cmd_vel_publisher.publish(msg)
-
     def count_humans(self, image):
         # Convert the image to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -195,6 +245,8 @@ class MavicNode(Node):
             if not self.target_found:
                 self.get_logger().info('Target found for the first time.')
                 self.target_found = True
+                self.stop()  # Stop the drone before starting to fly towards the human
+                time.sleep(1.5)  # Stabilization delay
             # Draw bounding boxes around the detected human
             for (x, y, w, h) in humans:
                 cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
@@ -221,13 +273,18 @@ class MavicNode(Node):
                 self.turn_left()
             else:
                 self.turn_right()
+            self.stop()  # Stop after moving
+            time.sleep(1.5) # Stabilization delay
         elif abs(offset_y) > 50:
             if offset_y < 0:
                 self.change_altitude(0.1)
             else:
                 self.change_altitude(-0.1)
+            self.stop()  # Stop after moving
+            time.sleep(1.5) # Stabilization delay
         else:
             self.move_forward()
+            time.sleep(1.5) # Stabilization delay
 
     def broadcast_location(self):
         if not self.broadcasting:
@@ -250,57 +307,36 @@ class MavicNode(Node):
         self.get_logger().info('Published stop command to /cmd_vel.')
 
 
-    def move_forward(self):
+    def stop_turning(self):
         msg = Twist()
-        msg.linear.x = 1.0  # Move forward
-        msg.linear.y = 0.0
-        msg.linear.z = 0.0
-        msg.angular.x = 0.0
-        msg.angular.y = 0.0
         msg.angular.z = 0.0
         self.cmd_vel_publisher.publish(msg)
+        self.get_logger().info('Published stop_turning command to /cmd_vel.')
+
+
+    def move_forward(self, velocity=1.0):
+        msg = Twist()
+        msg.linear.x = velocity # Move forward
+        self.cmd_vel_publisher.publish(msg)
         self.get_logger().info('Published forward velocity command to /cmd_vel.')
-        time.sleep(1.5) # Stabilization delay
-        self.stop()  # Stop after moving
 
     def turn_left(self):
         msg = Twist()
-        msg.linear.x = 0.0
-        msg.linear.y = 0.0
-        msg.linear.z = 0.0
-        msg.angular.x = 0.0
-        msg.angular.y = 0.0
         msg.angular.z = 1.0
         self.cmd_vel_publisher.publish(msg)
         self.get_logger().info('Published left turn command to /cmd_vel.')
-        time.sleep(1.5) # Stabilization delay
-        self.stop()  # Stop after turning
 
     def turn_right(self):
         msg = Twist()
-        msg.linear.x = 0.0
-        msg.linear.y = 0.0
-        msg.linear.z = 0.0
-        msg.angular.x = 0.0
-        msg.angular.y = 0.0
         msg.angular.z = -1.0
         self.cmd_vel_publisher.publish(msg)
         self.get_logger().info('Published right turn command to /cmd_vel.')
-        time.sleep(1.5) # Stabilization delay
-        self.stop()  # Stop after turning
 
     def change_altitude(self, altitude):
         msg = Twist()
-        msg.linear.x = 0.0
-        msg.linear.y = 0.0
         msg.linear.z = altitude
-        msg.angular.x = 0.0
-        msg.angular.y = 0.0
-        msg.angular.z = 0.0
         self.cmd_vel_publisher.publish(msg)
         self.get_logger().info(f'Published altitude change command to /cmd_vel with altitude {altitude}.')
-        time.sleep(1.5) # Stabilization delay
-        self.stop()  # Stop 
 
     def fly_around(self):
         return
