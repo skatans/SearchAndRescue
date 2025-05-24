@@ -1,14 +1,16 @@
 import rclpy
 from rclpy.node import Node
 
-from std_msgs.msg import String
-import cv2
-import numpy as np
-from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
 from geometry_msgs.msg import Twist
+from geometry_msgs.msg import PointStamped
 
+import cv2
 import time
+import random
+import numpy as np
 
 import ament_index_python
 import os
@@ -16,24 +18,39 @@ import os
 class MavicNode(Node):
     def __init__(self):
         super().__init__('mavic_camera_node')
-        self.subscription = self.create_subscription(
-            Image,
-            '/Mavic_2_PRO/camera/image_color',
-            self.listener_callback,
-            10)
-        self.cmd_vel_publisher = self.create_publisher(Twist, '/Mavic_2_PRO/cmd_vel', 10)
-        self.gps_publisher = self.create_publisher(String, '/target_found', 10)
-        self.bridge = CvBridge()
-        self.target_found = False
-        self.arrived_at_target = False
-        self.broadcasting = False
         self.get_logger().info('Mavic 2 Pro Camera Node has been started.')
+        # Subscription to the drone camera image topic
+        self.img_sub = self.create_subscription(Image, '/Mavic_2_PRO/camera/image_color', self.listener_callback, 10)
+        # Image processing tools
+        self.bridge = CvBridge()
         self.image_height = 0
         self.image_width = 0
         self.mid_x = 0
         self.mid_y = 0
         self.human_cascade = self.initialize_model()
+        # Flags to track the state of the drone
+        self.target_found = False
+        self.arrived_at_target = False
+        self.broadcasting = False
+        # GPS
+        self.gps_sub = self.create_subscription(PointStamped, '/Mavic_2_PRO/gps', self.gps_callback, 10)
+        self.origin_lat = None
+        self.origin_lon = None
+        # Publisher for broadcasting GPS coordinates when target is found
+        self.gps_publisher = self.create_publisher(PointStamped, '/target/gps', 10)
+        self.target_publisher = self.create_publisher(String, '/target/found', 10)
+        # Publisher for the drone's velocity commands
+        self.cmd_vel_publisher = self.create_publisher(Twist, '/Mavic_2_PRO/cmd_vel', 10)
 
+    def gps_callback(self, msg):
+        if self.origin_lat is None or self.origin_lon is None:
+            # Set the origin coordinates from the first GPS message
+            self.origin_lat = msg.point.x
+            self.origin_lon = msg.point.y
+            self.get_logger().info(f'Setting origin GPS coordinates: ({self.origin_lat}, {self.origin_lon})')
+        if self.broadcasting:
+            print(msg.point.x, msg.point.y, msg.point.z)
+    
     def listener_callback(self, msg):
         try:
             # Get the image from the drone camera
@@ -54,6 +71,9 @@ class MavicNode(Node):
 
             # If target is found, fly closer to it
             if self.target_found and not self.arrived_at_target:
+                msg = String()
+                msg.data = "true"
+                self.target_publisher.publish(msg)
                 self.fly_towards_human(cv_image)
 
             # If target is found and drone has arrived at the target, broadcast the location
@@ -70,74 +90,82 @@ class MavicNode(Node):
         return cv2.CascadeClassifier(haarcascade_path)
 
     def stop(self):
-        twist = Twist()
-        twist.linear.x = 0.0
-        twist.linear.y = 0.0
-        twist.linear.z = 0.0
-        twist.angular.x = 0.0
-        twist.angular.y = 0.0
-        twist.angular.z = 0.0
-        self.cmd_vel_publisher.publish(twist)
+        msg = Twist()
+        msg.linear.x = 0.0
+        msg.linear.y = 0.0
+        msg.linear.z = 0.0
+        msg.angular.x = 0.0
+        msg.angular.y = 0.0
+        msg.angular.z = 0.0
+        self.cmd_vel_publisher.publish(msg)
         self.get_logger().info('Published stop command to /cmd_vel.')
 
 
     def move_forward(self):
-        twist = Twist()
-        twist.linear.x = 1.0  # Move forward
-        twist.linear.y = 0.0
-        twist.linear.z = 0.0
-        twist.angular.x = 0.0
-        twist.angular.y = 0.0
-        twist.angular.z = 0.0
-        self.cmd_vel_publisher.publish(twist)
+        msg = Twist()
+        msg.linear.x = 1.0  # Move forward
+        msg.linear.y = 0.0
+        msg.linear.z = 0.0
+        msg.angular.x = 0.0
+        msg.angular.y = 0.0
+        msg.angular.z = 0.0
+        self.cmd_vel_publisher.publish(msg)
         self.get_logger().info('Published forward velocity command to /cmd_vel.')
         time.sleep(1.5) # Stabilization delay
         self.stop()  # Stop after moving
 
     def turn_left(self):
-        twist = Twist()
-        twist.linear.x = 0.0
-        twist.linear.y = 0.0
-        twist.linear.z = 0.0
-        twist.angular.x = 0.0
-        twist.angular.y = 0.0
-        twist.angular.z = 1.0
-        self.cmd_vel_publisher.publish(twist)
+        msg = Twist()
+        msg.linear.x = 0.0
+        msg.linear.y = 0.0
+        msg.linear.z = 0.0
+        msg.angular.x = 0.0
+        msg.angular.y = 0.0
+        msg.angular.z = 1.0
+        self.cmd_vel_publisher.publish(msg)
         self.get_logger().info('Published left turn command to /cmd_vel.')
         time.sleep(1.5) # Stabilization delay
         self.stop()  # Stop after turning
 
     def turn_right(self):
-        twist = Twist()
-        twist.linear.x = 0.0
-        twist.linear.y = 0.0
-        twist.linear.z = 0.0
-        twist.angular.x = 0.0
-        twist.angular.y = 0.0
-        twist.angular.z = -1.0
-        self.cmd_vel_publisher.publish(twist)
+        msg = Twist()
+        msg.linear.x = 0.0
+        msg.linear.y = 0.0
+        msg.linear.z = 0.0
+        msg.angular.x = 0.0
+        msg.angular.y = 0.0
+        msg.angular.z = -1.0
+        self.cmd_vel_publisher.publish(msg)
         self.get_logger().info('Published right turn command to /cmd_vel.')
         time.sleep(1.5) # Stabilization delay
         self.stop()  # Stop after turning
 
     def change_altitude(self, altitude):
-        twist = Twist()
-        twist.linear.x = 0.0
-        twist.linear.y = 0.0
-        twist.linear.z = altitude
-        twist.angular.x = 0.0
-        twist.angular.y = 0.0
-        twist.angular.z = 0.0
-        self.cmd_vel_publisher.publish(twist)
+        msg = Twist()
+        msg.linear.x = 0.0
+        msg.linear.y = 0.0
+        msg.linear.z = altitude
+        msg.angular.x = 0.0
+        msg.angular.y = 0.0
+        msg.angular.z = 0.0
+        self.cmd_vel_publisher.publish(msg)
         self.get_logger().info(f'Published altitude change command to /cmd_vel with altitude {altitude}.')
         time.sleep(1.5) # Stabilization delay
         self.stop()  # Stop 
 
+    def send_random_command(self):
+        msg = Twist()
+        msg.linear.x = random.uniform(-1.0, 1.0)
+        msg.angular.z = random.uniform(-0.5, 0.5)
+        self.cmd_vel_publisher.publish(msg)
+
     def fly_around(self):
+        return
         # This method will contain logic to control the drone's flight
         # For now, we will just log that the drone is flying around
-        self.get_logger().info('Mavic 2 Pro is flying around.')
+        #self.get_logger().info('Mavic 2 Pro is flying around.')
 
+        #self.send_random_command()  # Send a random command to the drone
         #self.move_forward()  # Move forward as a default action
 
     def count_humans(self, image):
