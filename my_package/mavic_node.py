@@ -20,6 +20,7 @@ class MavicNode(Node):
             self.listener_callback,
             10)
         self.cmd_vel_publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.gps_publisher = self.create_publisher(String, '/target_found', 10)
         self.bridge = CvBridge()
         self.target_found = False
         self.get_logger().info('Mavic 2 Pro Camera Node has been started.')
@@ -29,7 +30,8 @@ class MavicNode(Node):
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             cv2.imshow("Mavic 2 Pro Camera", cv_image)
             cv2.waitKey(1)
-            self.identify_target(cv_image)
+            if not self.target_found:
+                self.identify_target(cv_image)
         except Exception as e:
             self.get_logger().error(f'Could not convert image: {e}')
 
@@ -96,9 +98,8 @@ class MavicNode(Node):
         #self.move_forward()  # Move forward as a default action
             
     def identify_target(self, image):
-        # Use the local haarcascade_fullbody.xml from the installed package data directory
+        # Use the local haarcascade_fullbody.xml from the package's share directory
         package_share_directory = ament_index_python.get_package_share_directory('my_package')
-        print(package_share_directory)
         haarcascade_path = os.path.join(package_share_directory, 'data', 'haarcascade_fullbody.xml')
         human_cascade = cv2.CascadeClassifier(haarcascade_path)
 
@@ -109,12 +110,18 @@ class MavicNode(Node):
 
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         humans = human_cascade.detectMultiScale(gray, 1.1, 4)
-        self.target_found = len(humans) > 0
-
-        if self.target_found:
-            self.get_logger().info('Target found in the image.')
+        if len(humans) == 0:
+            return
         else:
-            self.get_logger().info('No target found in the image.')
+            self.target_found = True
+            # Draw bounding boxes around the detected human
+            for (x, y, w, h) in humans:
+                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # Display the image with bounding boxes
+            cv2.imshow("Mavic 2 Pro Camera", image)
+            cv2.waitKey(1)
+
+            self.get_logger().info('Target found in the image.')
 
 def main(args=None):
     rclpy.init(args=args)
