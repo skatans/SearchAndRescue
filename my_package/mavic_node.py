@@ -5,6 +5,9 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import Imu
 from std_msgs.msg import String
+from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Point
+from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PointStamped
 from tf_transformations import euler_from_quaternion
@@ -49,7 +52,7 @@ class MavicNode(Node):
         self.tolerance = 5.0 # how many meters away from a waypoint to consider it found
         self.step = 20.0  # meters
         # Publisher for broadcasting GPS coordinates when target is found
-        self.gps_publisher = self.create_publisher(PointStamped, '/target/gps', 10)
+        self.pose_publisher = self.create_publisher(Pose, '/target/pose', 10)
         self.target_publisher = self.create_publisher(String, '/target/found', 10)
         # Publisher for the drone's velocity commands
         self.cmd_vel_publisher = self.create_publisher(Twist, '/Mavic_2_PRO/cmd_vel', 10)
@@ -71,8 +74,7 @@ class MavicNode(Node):
         #self.get_logger().info(f'Yaw (heading): {yaw}')
 
     def gps_callback(self, msg):
-        if self.target_found:
-            return  # Do not process GPS messages when the target has been found
+        #self.get_logger().info(f'Received GPS coordinates: ({msg.point.x}, {msg.point.y})')
         if not self.initialized:
             # Set the origin coordinates from the first GPS message
             self.origin_lat = msg.point.x
@@ -85,9 +87,8 @@ class MavicNode(Node):
             self.initialized = True
         # Update the current position
         self.current_pos = (msg.point.x, msg.point.y)
-        if self.broadcasting:
-            print(msg.point.x, msg.point.y, msg.point.z)
-        self.navigate()  # Call the navigate method to control the drone's movement
+        if not self.target_found:
+            self.navigate()  # Call the navigate method to control the drone's movement
 
     def generate_lawn_mower_path(self):
         self.get_logger().info('Generating waypoints.')
@@ -254,10 +255,11 @@ class MavicNode(Node):
             cv2.imshow("Mavic 2 Pro Detections", image)
             cv2.waitKey(1)
 
-            # Check if the bounding box height or width is at least 80% of the image height
-            if h >= 0.8 * self.image_height or w >= 0.8 * self.image_height:
+            # Check if the bounding box height or width is at least 70% of the image height
+            if h >= 0.7 * self.image_height or w >= 0.7 * self.image_height:
                 self.arrived_at_target = True
-                self.get_logger().info('Arrived at target: bounding box height >= 80% of image height.')
+                self.get_logger().info('Arrived at target')
+                self.stop()
 
             # Fly towards the center of the detected human
             self.match_midpoints(x + w // 2, y + h // 2)
@@ -273,23 +275,44 @@ class MavicNode(Node):
                 self.turn_left()
             else:
                 self.turn_right()
-            self.stop()  # Stop after moving
             time.sleep(1.5) # Stabilization delay
+            self.stop()  # Stop after moving
         elif abs(offset_y) > 50:
             if offset_y < 0:
                 self.change_altitude(0.1)
             else:
                 self.change_altitude(-0.1)
-            self.stop()  # Stop after moving
             time.sleep(1.5) # Stabilization delay
+            self.stop()  # Stop after moving
         else:
             self.move_forward()
-            time.sleep(1.5) # Stabilization delay
+        time.sleep(1.5) # Stabilization delay
 
     def broadcast_location(self):
         if not self.broadcasting:
             self.broadcasting = True
             self.get_logger().info('Broadcasting target location.')
+
+        self.stop()  # Send stop command in case the drone is moving
+        # Pose for target location
+        pose = Pose()
+
+        # Get the current GPS coordinates to a Point
+        point = Point()
+        point.x = self.current_pos[0]  # Latitude
+        point.y = self.current_pos[1]  # Longitude
+        point.z = 0.0  # Altitude
+        pose.position = point
+
+        # Quaternion might not be necessary for 2D navigation for the turtlebot, but included for completeness
+        quaternion = Quaternion()
+        quaternion.x = 0.0
+        quaternion.y = 0.0
+        quaternion.z = math.sin(self.yaw / 2.0)
+        quaternion.w = math.cos(self.yaw / 2.0)
+        pose.orientation = quaternion
+
+        self.pose_publisher.publish(pose)
 
     '''
     Drone control methods
@@ -337,15 +360,6 @@ class MavicNode(Node):
         msg.linear.z = altitude
         self.cmd_vel_publisher.publish(msg)
         self.get_logger().info(f'Published altitude change command to /cmd_vel with altitude {altitude}.')
-
-    def fly_around(self):
-        return
-        # This method will contain logic to control the drone's flight
-        # For now, we will just log that the drone is flying around
-        #self.get_logger().info('Mavic 2 Pro is flying around.')
-
-        #self.send_random_command()  # Send a random command to the drone
-        #self.move_forward()  # Move forward as a default action
 
 
 def main(args=None):
