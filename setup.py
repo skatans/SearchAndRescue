@@ -24,6 +24,8 @@ setup(
     entry_points={
         'console_scripts': [
             'my_robot_driver = my_package.my_robot_driver:main',
+            'mavic_driver = my_package.mavic_driver:main',
+            'mavic_node = my_package.mavic_node:main',
         ],
     },
 )

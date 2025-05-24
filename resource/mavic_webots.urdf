@@ -17,6 +17,6 @@
             <gyroName>gyro</gyroName>
         </plugin>
 
-        <plugin type="webots_ros2_mavic.mavic_driver.MavicDriver" />
+        <plugin type="my_package.mavic_driver.MavicDriver" />
     </webots>
 </robot>
