@@ -8,6 +8,8 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 
+import time
+
 import ament_index_python
 import os
 
@@ -19,15 +21,22 @@ class MavicNode(Node):
             '/Mavic_2_PRO/camera/image_color',
             self.listener_callback,
             10)
-        self.cmd_vel_publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.cmd_vel_publisher = self.create_publisher(Twist, '/Mavic_2_PRO/cmd_vel', 10)
         self.gps_publisher = self.create_publisher(String, '/target_found', 10)
         self.bridge = CvBridge()
         self.target_found = False
+        self.arrived_at_target = False
         self.get_logger().info('Mavic 2 Pro Camera Node has been started.')
+        self.mid_x = 0
+        self.mid_y = 0
 
     def listener_callback(self, msg):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            if self.mid_x == 0 and self.mid_y == 0:
+                height, width, _ = cv_image.shape
+                self.mid_x = width // 2
+                self.mid_y = height // 2
             cv2.imshow("Mavic 2 Pro Camera", cv_image)
             cv2.waitKey(1)
             if not self.target_found:
@@ -46,6 +55,7 @@ class MavicNode(Node):
         self.cmd_vel_publisher.publish(twist)
         self.get_logger().info('Published stop command to /cmd_vel.')
 
+
     def move_forward(self):
         twist = Twist()
         twist.linear.x = 1.0  # Move forward
@@ -56,6 +66,8 @@ class MavicNode(Node):
         twist.angular.z = 0.0
         self.cmd_vel_publisher.publish(twist)
         self.get_logger().info('Published forward velocity command to /cmd_vel.')
+        time.sleep(1.5) # Stabilization delay
+        self.stop()  # Stop after moving
 
     def turn_left(self):
         twist = Twist()
@@ -67,6 +79,8 @@ class MavicNode(Node):
         twist.angular.z = 1.0
         self.cmd_vel_publisher.publish(twist)
         self.get_logger().info('Published left turn command to /cmd_vel.')
+        time.sleep(1.5) # Stabilization delay
+        self.stop()  # Stop after turning
 
     def turn_right(self):
         twist = Twist()
@@ -78,6 +92,8 @@ class MavicNode(Node):
         twist.angular.z = -1.0
         self.cmd_vel_publisher.publish(twist)
         self.get_logger().info('Published right turn command to /cmd_vel.')
+        time.sleep(1.5) # Stabilization delay
+        self.stop()  # Stop after turning
 
     def change_altitude(self, altitude):
         twist = Twist()
@@ -89,6 +105,8 @@ class MavicNode(Node):
         twist.angular.z = 0.0
         self.cmd_vel_publisher.publish(twist)
         self.get_logger().info(f'Published altitude change command to /cmd_vel with altitude {altitude}.')
+        time.sleep(1.5) # Stabilization delay
+        self.stop()  # Stop 
 
     def fly_around(self):
         # This method will contain logic to control the drone's flight
@@ -113,15 +131,38 @@ class MavicNode(Node):
         if len(humans) == 0:
             return
         else:
-            self.target_found = True
+            if not self.target_found:
+                self.get_logger().info('Target found for the first time.')
+                self.target_found = True
             # Draw bounding boxes around the detected human
             for (x, y, w, h) in humans:
                 cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
             # Display the image with bounding boxes
-            cv2.imshow("Mavic 2 Pro Camera", image)
+            cv2.imshow("Mavic 2 Pro Detections", image)
             cv2.waitKey(1)
+            
+            # Fly towards the center of the detected human
+            self.fly_to_target(x + w // 2, y + h // 2)
 
-            self.get_logger().info('Target found in the image.')
+    def fly_to_target(self, target_x, target_y):
+        # Calculate the offset from the center of the image
+        offset_x = target_x - self.mid_x
+        offset_y = target_y - self.mid_y
+
+        # Adjust the drone's movement based on the offset
+        if abs(offset_x) > 50:
+            if offset_x < 0:
+                self.turn_left()
+            else:
+                self.turn_right()
+        elif abs(offset_y) > 50:
+            if offset_y < 0:
+                self.change_altitude(0.1)
+            else:
+                self.change_altitude(-0.1)
+        else:
+            self.move_forward()
+
 
 def main(args=None):
     rclpy.init(args=args)
