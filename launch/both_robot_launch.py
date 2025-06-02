@@ -38,6 +38,9 @@ def generate_launch_description():
         ros2_supervisor=True
     )
 
+    # Give the /robot_description topic a dummy robot during initialization, turtlebot_driver will pass the correct description when it is ready.
+    # This avoids the blocking behavior of the topic: if it receives nothing during initilization (turtlebot driver is not yet ready), it won't recover to receive
+    # the correct turtlebot description when the driver is ready to pass it to the topic.
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -47,6 +50,7 @@ def generate_launch_description():
         }],
     )
 
+    # Mavic drone controller
     robot_description_path = os.path.join(package_dir, 'resource', 'mavic_webots.urdf')
     mavic_driver = WebotsController(
         robot_name='Mavic_2_PRO',
@@ -56,9 +60,10 @@ def generate_launch_description():
         respawn=True
     )
 
+    # Turtlebot controller
     turtlebot_description_path = os.path.join(package_dir, 'resource', 'turtlebot_webots.urdf')
     ros2_control_params = os.path.join(package_dir, 'resource', 'ros2control.yml')
-    mappings = [('/diffdrive_controller/cmd_vel', '/cmd_vel'), ('/diffdrive_controller/odom', '/odom')]
+    mappings = [('/diffdrive_controller/cmd_vel', '/turtlebot/cmd_vel'), ('/diffdrive_controller/odom', '/turtlebot/odom')]
     turtlebot_driver = WebotsController(
         robot_name='TurtleBot3Burger',
         parameters=[
@@ -70,7 +75,7 @@ def generate_launch_description():
         respawn=True
     )
 
-    # ROS control spawners
+    # ROS control spawners for turtlebot hardware in simulation (wheels, motor)
     controller_manager_timeout = ['--controller-manager-timeout', '50']
     diffdrive_controller_spawner = Node(
         package='controller_manager',
@@ -86,7 +91,7 @@ def generate_launch_description():
     )
     ros_control_spawners = [diffdrive_controller_spawner, joint_state_broadcaster_spawner]
 
-    # Wait for the simulation to be ready to start navigation nodes
+    # Wait for the simulation to be ready to start control spawner nodes: if started during initialization, the controls won't map correctly to turtlebot hardware
     waiting_nodes = WaitForControllerConnection(
         target_driver=turtlebot_driver,
         nodes_to_start= ros_control_spawners
