@@ -6,7 +6,9 @@ data_files.append(('share/ament_index/resource_index/packages', ['resource/' + p
 data_files.append(('share/' + package_name + '/launch', ['launch/robot_launch.py']))
 data_files.append(('share/' + package_name + '/worlds', ['worlds/my_world.wbt']))
 data_files.append(('share/' + package_name + '/resource', ['resource/my_robot.urdf']))
+data_files.append(('share/' + package_name + '/resource', ['resource/mavic_webots.urdf']))
 data_files.append(('share/' + package_name, ['package.xml']))
+data_files.append(('share/' + package_name + '/data', ['data/haarcascade_fullbody.xml']))
 
 setup(
     name=package_name,
@@ -23,6 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'my_robot_driver = my_package.my_robot_driver:main',
+            'mavic_driver = my_package.mavic_driver:main',
+            'mavic_node = my_package.mavic_node:main',
         ],
     },
 )
