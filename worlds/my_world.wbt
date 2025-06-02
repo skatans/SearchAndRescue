@@ -14,6 +14,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projec
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projects/objects/trees/protos/Pine.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projects/robots/dji/mavic/protos/Mavic2Pro.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/humans/pedestrian/protos/Pedestrian.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projects/robots/robotis/turtlebot/protos/TurtleBot3Burger.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projects/devices/robotis/protos/RobotisLds01.proto"
 
 WorldInfo {
   info [
@@ -91,10 +93,6 @@ CardboardBox {
   translation -0.730157 -1.22891 0.3
   rotation 0 0 1 1.309
 }
-TeslaModel3Simple {
-  translation -41.5139 4.34169 0.31
-  rotation 0 0 1 -0.2618053071795865
-}
 Pine {
   translation -14.0083 -14.4828 0
   rotation 0 0 1 3.1415853071795863
@@ -127,7 +125,7 @@ Pine {
   name "pine tree(2)"
 }
 Pedestrian {
-  translation 156.28 -65.83 1.27
+  translation 30.00 -20.00 1.27
 }
 Mavic2Pro {
   translation 0 0 0.1
@@ -142,139 +140,25 @@ Mavic2Pro {
     }
   ]
 }
-Robot {
-  children [
-    HingeJoint {
-      jointParameters HingeJointParameters {
-        axis 0 1 0
-        anchor 0 0 0.025
-      }
-      device [
-        RotationalMotor {
-          name "left wheel motor"
-        }
-      ]
-      endPoint Solid {
-        translation 0 0.045 0.025
-        rotation 0 1 0 0
-        children [
-          DEF WHEEL Pose {
-            rotation 1 0 0 1.5707996938995747
-            children [
-              Shape {
-                appearance PBRAppearance {
-                  baseColor 1 0 0
-                  roughness 1
-                  metalness 0
-                }
-                geometry Cylinder {
-                  height 0.01
-                  radius 0.025
-                }
-              }
-            ]
-          }
-        ]
-        name "left wheel"
-        boundingObject USE WHEEL
-        physics Physics {
-        }
-      }
+TurtleBot3Burger {
+  translation 3 0 0
+  name "TurtleBot3Burger"
+  controller "<extern>"
+  controllerArgs [
+    ""
+  ]
+  extensionSlot [
+    Solid {
+      name "imu_link"
     }
-    HingeJoint {
-      jointParameters HingeJointParameters {
-        axis 0 1 0
-        anchor 0 0 0.025
-      }
-      device [
-        RotationalMotor {
-          name "right wheel motor"
-        }
-      ]
-      endPoint Solid {
-        translation 0 -0.045 0.025
-        rotation 0 1 0 0
-        children [
-          USE WHEEL
-        ]
-        name "right wheel"
-        boundingObject USE WHEEL
-        physics Physics {
-        }
-      }
+    GPS {
     }
-    Pose {
-      translation 0 0 0.0415
-      children [
-        Shape {
-          appearance PBRAppearance {
-            baseColor 0 0 1
-            roughness 1
-            metalness 0
-          }
-          geometry DEF BODY Cylinder {
-            height 0.08
-            radius 0.045
-          }
-        }
-      ]
+    InertialUnit {
+      name "inertial_unit"
     }
-    DistanceSensor {
-      translation 0.042 0.02 0.063
-      rotation 0 0 1 0.5236003061004253
-      children [
-        DEF SENSOR Pose {
-          rotation 0 1 0 1.5708
-          children [
-            Shape {
-              appearance PBRAppearance {
-                baseColor 1 1 0
-                roughness 1
-                metalness 0
-              }
-              geometry Cylinder {
-                height 0.004
-                radius 0.008
-              }
-            }
-          ]
-        }
-      ]
-      name "ds0"
-      lookupTable [
-        0 1020 0
-        0.05 1020 0
-        0.15 0 0
-      ]
-      numberOfRays 2
-      aperture 1
-    }
-    DistanceSensor {
-      translation 0.042 -0.02 0.063
-      rotation 0 0 1 -0.5235996938995747
-      children [
-        USE SENSOR
-      ]
-      name "ds1"
-      lookupTable [
-        0 1020 0
-        0.05 1020 0
-        0.15 0 0
-      ]
-      numberOfRays 2
-      aperture 1
+    RobotisLds01 {
     }
   ]
-  name "my_robot"
-  boundingObject Pose {
-    translation 0 0 0.0415
-    children [
-      USE BODY
-    ]
-  }
-  physics Physics {
-  }
-  controller "<extern>"
 }
 Cat {
   translation 0.573639 -0.459616 0
