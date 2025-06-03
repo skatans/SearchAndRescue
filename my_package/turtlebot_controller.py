@@ -53,7 +53,7 @@ class SimpleController(Node):
         self.target_found = msg.data
         if self.target_found.lower() == 'true' and self.robot_moving == False:
             msg_turtlebot = String()
-            msg_turtlebot.data = "Start moving to location"
+            msg_turtlebot.data = "starting"
             self.state_publisher.publish(msg_turtlebot)
             self.robot_moving = True
     
@@ -99,12 +99,12 @@ class SimpleController(Node):
             if distance < 1.0:
                 self.publisher_.publish(msg)
                 msg_turtlebot = String()
-                msg_turtlebot.data = "Arrived at the location"
+                msg_turtlebot.data = "arrived"
                 self.state_publisher.publish(msg_turtlebot)
                 return
 
             msg_turtlebot = String()
-            msg_turtlebot.data = "Moving to location"
+            msg_turtlebot.data = "coming"
             self.state_publisher.publish(msg_turtlebot)
 
             # If orientation is not ok TURN
