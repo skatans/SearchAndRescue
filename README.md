@@ -19,3 +19,11 @@ source /opt/ros/jazzy/setup.bash
 source install/local_setup.bash
 ros2 launch my_package robot_launch.py
 ```
+
+Terminal window 3 (turtlebot):
+```
+colcon build
+source /opt/ros/jazzy/setup.bash
+source install/local_setup.bash
+ros2 run my_package turtlebot_controller
+```
