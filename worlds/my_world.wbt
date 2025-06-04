@@ -19,10 +19,10 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/develop/projec
 
 WorldInfo {
   info [
-    "This demonstration shows a DJI Mavic 2 PRO flying over a rural area by exposing the ROS2 Twist topic."
+    "This demonstration shows a DJI Mavic 2 PRO flying over a rural area searching for a human."
   ]
-  title "ROS2 and DJI Mavic 2 PRO demo"
-  basicTimeStep 8
+  title "Search and rescue"
+  basicTimeStep 10
   defaultDamping Damping {
     linear 0.5
     angular 0.5
@@ -125,7 +125,7 @@ Pine {
   name "pine tree(2)"
 }
 Pedestrian {
-  translation 30.00 -20.00 1.27
+  translation 10.00 -10.00 1.27
 }
 Mavic2Pro {
   translation 0 0 0.1
