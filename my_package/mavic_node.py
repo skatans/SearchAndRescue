@@ -292,8 +292,8 @@ class MavicNode(Node):
         if not self.broadcasting:
             self.broadcasting = True
             self.get_logger().info('Broadcasting target location.')
+            self.stop()  # Send stop command in case the drone is moving
 
-        self.stop()  # Send stop command in case the drone is moving
         # Pose for target location
         pose = Pose()
 
