@@ -51,13 +51,17 @@ class SimpleController(Node):
         # location locked
         if self.target_found.lower() == 'true' and self.lock_target == False:
             self.target_pose = msg.position.x, msg.position.y
+            self.get_logger().info(f'Target location received: {self.target_pose}')
             # Lock the target location to prevent the target location drifting for turtlebot navigation
             self.lock_target = True 
     
     def target_found_callback(self, msg):
         self.target_found = msg.data
+        if not self.robot_moving:
+            self.get_logger().info(f'Target found status: {self.target_found}')
         # Set turtlebot to "starting to move to location"-mode when the drone confirms the target has been found AND when the turtlebot is not yet in the particular mode
         if self.target_found.lower() == 'true' and self.robot_moving == False:
+            self.get_logger().info('Target location confirmed')
             # Broadcast the information of turtlebot starting the process of moving to target location
             msg_turtlebot = String()
             msg_turtlebot.data = "starting"
@@ -90,6 +94,7 @@ class SimpleController(Node):
     def timer_callback(self):
         # Move the robot only when the target location has been found and confirmed
         if self.robot_moving and self.lock_target:
+            self.get_logger().info(f'Moving to target location: {self.target_pose}')
             # Define the X, Y coordinates for target and current location to avoid oscillation during navigation
             target_x, target_y = self.target_pose
             current_x, current_y = self.current_pos

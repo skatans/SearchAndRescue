@@ -56,6 +56,18 @@ class MavicNode(Node):
         self.target_publisher = self.create_publisher(String, '/target/found', 10)
         # Publisher for the drone's velocity commands
         self.cmd_vel_publisher = self.create_publisher(Twist, '/Mavic_2_PRO/cmd_vel', 10)
+        # turtlebot listener
+        self.turtlebot_sub = self.create_subscription(String, '/turtlebot/state', self.turtlebot_state_callback, 10)
+
+
+    '''
+    Turlebot state listener
+    '''
+    def turtlebot_state_callback(self, msg):
+        self.get_logger().info(f'Received turtlebot state: {msg.data}')
+        if msg.data.lower() == 'arrived':
+            self.get_logger().info('Turtlebot has arrived. Rising to higher altitude.')
+            self.change_altitude(50.0)
 
     '''
     IMU, GPS and navigation
@@ -313,6 +325,7 @@ class MavicNode(Node):
         pose.orientation = quaternion
 
         self.pose_publisher.publish(pose)
+        self.target_publisher.publish(String(data='true'))
 
     '''
     Drone control methods
